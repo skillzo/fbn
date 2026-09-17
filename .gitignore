@@ -1,0 +1,12 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+.DS_Store
+load-summary.txt
+plan.md
+phase.md
+walkthrough.md
+*.pdf
+TestResults/

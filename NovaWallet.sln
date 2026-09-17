@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{D9CB3450-A335-4266-BA7E-DB2D6593ED85}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NovaWallet.Api", "src\NovaWallet.Api\NovaWallet.Api.csproj", "{3A93D22A-8F23-42D9-84F6-4307C7C039ED}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{06824E94-FF53-4567-8E47-9365340ED3FD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NovaWallet.Tests", "tests\NovaWallet.Tests\NovaWallet.Tests.csproj", "{0E53FC51-C18A-44CD-B035-B1455C82633B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{3A93D22A-8F23-42D9-84F6-4307C7C039ED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3A93D22A-8F23-42D9-84F6-4307C7C039ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3A93D22A-8F23-42D9-84F6-4307C7C039ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3A93D22A-8F23-42D9-84F6-4307C7C039ED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0E53FC51-C18A-44CD-B035-B1455C82633B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0E53FC51-C18A-44CD-B035-B1455C82633B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0E53FC51-C18A-44CD-B035-B1455C82633B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0E53FC51-C18A-44CD-B035-B1455C82633B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{3A93D22A-8F23-42D9-84F6-4307C7C039ED} = {D9CB3450-A335-4266-BA7E-DB2D6593ED85}
+		{0E53FC51-C18A-44CD-B035-B1455C82633B} = {06824E94-FF53-4567-8E47-9365340ED3FD}
+	EndGlobalSection
+EndGlobal
