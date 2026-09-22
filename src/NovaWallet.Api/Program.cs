@@ -95,7 +95,6 @@ app.UseRateLimiter();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    // Single-writer migration lock so multiple replicas don't race on startup.
     await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_lock(872364)");
     try
     {
