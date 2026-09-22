@@ -2,13 +2,13 @@ services:
   db:
     image: postgres:16
     environment:
-      POSTGRES_USER: nova
-      POSTGRES_PASSWORD: nova
-      POSTGRES_DB: novawallet
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nova -d novawallet"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -19,15 +19,17 @@ services:
       dockerfile: src/NovaWallet.Api/Dockerfile
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
       ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__Default: Host=db;Port=5432;Database=novawallet;Username=nova;Password=nova
+      ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       Swagger__Enabled: "true"
-      Jwt__Key: aefcb591-b13d-4021-9eb7-9cadb1d0a1b3
-      Jwt__Issuer: NovaWallet
-      Jwt__Audience: NovaWallet.Api
-      DevAuth__Enabled: "true"
-      Transfers__DailyLimitKobo: "50000000"
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: ${JWT_ISSUER}
+      Jwt__Audience: ${JWT_AUDIENCE}
+      DevAuth__Enabled: ${DEV_AUTH_ENABLED}
+      Transfers__DailyLimitKobo: ${DAILY_LIMIT_KOBO}
     depends_on:
       db:
         condition: service_healthy

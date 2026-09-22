@@ -1,3 +1,7 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
@@ -11,7 +15,7 @@ using NovaWallet.Api.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
-    ?? "Host=localhost;Port=5432;Database=novawallet;Username=nova;Password=nova";
+    ?? throw new InvalidOperationException("ConnectionStrings:Default is required");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
@@ -27,14 +31,24 @@ builder.Services.AddScoped<TransferService>();
 builder.Services.AddSingleton<IEventPublisher, LoggingEventPublisher>();
 builder.Services.AddHostedService<OutboxPublisher>();
 
+var transfersPerMinute = builder.Configuration.GetValue("RateLimiting:TransfersPerMinute", 60);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.AddFixedWindowLimiter("transfers", limiter =>
+    options.AddPolicy("transfers", httpContext =>
     {
-        limiter.Window = TimeSpan.FromMinutes(1);
-        limiter.PermitLimit = builder.Configuration.GetValue("RateLimiting:TransfersPerMinute", 60);
-        limiter.QueueLimit = 0;
+        var sub = httpContext.User.FindFirstValue(JwtRegisteredClaimNames.Sub)
+            ?? httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? "anonymous";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            sub,
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = transfersPerMinute,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            });
     });
 });
 
@@ -74,17 +88,40 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue("Swagger:Enabl
 }
 
 app.UseExceptionHandler();
-app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
+    // Single-writer migration lock so multiple replicas don't race on startup.
+    await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_lock(872364)");
+    try
+    {
+        await db.Database.MigrateAsync();
+    }
+    finally
+    {
+        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_unlock(872364)");
+    }
 }
 
-app.MapHealthChecks("/health").AllowAnonymous();
+app.MapHealthChecks("/health/live", new HealthCheckOptions
+{
+    Predicate = _ => false,
+}).AllowAnonymous();
+
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = check => check.Name == "postgres",
+}).AllowAnonymous();
+
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = check => check.Name == "postgres",
+}).AllowAnonymous();
+
 app.MapDevToken();
 app.MapWalletEndpoints();
 app.MapTransferEndpoints();

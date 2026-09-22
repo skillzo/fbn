@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Mvc;
 using NovaWallet.Api.Auth;
+using NovaWallet.Api.Errors;
 using NovaWallet.Api.Services;
 
 namespace NovaWallet.Api.Endpoints;
@@ -48,13 +50,20 @@ public static class WalletEndpoints
         group.MapPost("/{id:guid}/credit", async (
             Guid id,
             CreditRequest body,
+            [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
             WalletService wallets,
             ClaimsPrincipal user,
             CancellationToken ct) =>
         {
+            if (string.IsNullOrWhiteSpace(idempotencyKey))
+                throw new AppException(400, "idempotency_key_required", "Idempotency-Key header is required");
+
+            if (idempotencyKey.Length > 100)
+                throw new AppException(400, "idempotency_key_invalid", "Idempotency-Key must be at most 100 characters");
+
             var actor = user.GetCustomerId();
-            var result = await wallets.CreditAsync(id, body.AmountKobo, actor, ct);
-            return Results.Created($"/wallets/{id}/balance", result);
+            var result = await wallets.CreditAsync(id, body.AmountKobo, idempotencyKey, actor, ct);
+            return Results.Json(result, statusCode: StatusCodes.Status201Created);
         })
         .RequireAuthorization(AuthExtensions.SystemOnlyPolicy);
 

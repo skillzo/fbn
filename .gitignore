@@ -8,5 +8,6 @@ load-summary.txt
 plan.md
 phase.md
 walkthrough.md
-*.pdf
 TestResults/
+.env
+

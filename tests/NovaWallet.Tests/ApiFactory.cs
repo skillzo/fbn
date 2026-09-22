@@ -24,6 +24,9 @@ public sealed class ApiFixture : IAsyncLifetime
         {
             QuietLogging(builder);
             builder.UseSetting("ConnectionStrings:Default", _postgres.GetConnectionString());
+            builder.UseSetting("Jwt:Key", "test-only-jwt-key-32-chars-min!!");
+            builder.UseSetting("Jwt:Issuer", "NovaWallet");
+            builder.UseSetting("Jwt:Audience", "NovaWallet.Api");
             builder.UseSetting("DevAuth:Enabled", "true");
             builder.UseSetting("Swagger:Enabled", "false");
             builder.UseSetting("RateLimiting:TransfersPerMinute", "10000");
@@ -44,6 +47,9 @@ public sealed class ApiFixture : IAsyncLifetime
         var settings = new Dictionary<string, string?>
         {
             ["ConnectionStrings:Default"] = PostgresConnectionString,
+            ["Jwt:Key"] = "test-only-jwt-key-32-chars-min!!",
+            ["Jwt:Issuer"] = "NovaWallet",
+            ["Jwt:Audience"] = "NovaWallet.Api",
             ["DevAuth:Enabled"] = "true",
             ["Swagger:Enabled"] = "false",
             ["RateLimiting:TransfersPerMinute"] = "10000",

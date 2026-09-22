@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using NovaWallet.Api.Data;
@@ -9,12 +12,13 @@ public class WalletService(AppDbContext db, TimeProvider time)
 {
     public record CreateWalletResult(Guid Id, string CustomerId, string Currency);
     public record BalanceResult(long BalanceKobo, string Currency);
-    public record CreditResult(Guid TransactionId, long BalanceKobo);
+    public record CreditResult(Guid TransactionId, long BalanceKobo, bool Cached = false);
 
     private sealed class BalanceRow
     {
         public long Balance { get; set; }
     }
+
     public record StatementItem(
         Guid Id,
         string Type,
@@ -43,7 +47,7 @@ public class WalletService(AppDbContext db, TimeProvider time)
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (IsUniqueCustomer(ex))
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
         {
             throw new AppException(409, "wallet_exists", "Customer already has a wallet");
         }
@@ -103,13 +107,25 @@ public class WalletService(AppDbContext db, TimeProvider time)
     public async Task<CreditResult> CreditAsync(
         Guid walletId,
         long amountKobo,
+        string idempotencyKey,
         string actor,
         CancellationToken ct)
     {
         if (amountKobo <= 0)
             throw new AppException(400, "invalid_amount", "amountKobo must be greater than zero");
 
+        // Scope system credits by actor so NIP retries share the same key space.
+        var scope = $"system:{actor}";
+        var requestHash = HashCredit(walletId, amountKobo);
+
         await using var dbTx = await db.Database.BeginTransactionAsync(ct);
+
+        if (!await TryClaimIdempotencyKeyAsync(scope, idempotencyKey, requestHash, ct))
+        {
+            await dbTx.RollbackAsync(ct);
+            db.ChangeTracker.Clear();
+            return await WaitForCachedCreditAsync(scope, idempotencyKey, requestHash, ct);
+        }
 
         var rows = await db.Database.SqlQuery<BalanceRow>($"""
             UPDATE wallets
@@ -148,12 +164,80 @@ public class WalletService(AppDbContext db, TimeProvider time)
             CreatedAt = now,
         });
 
+        var result = new CreditResult(transactionId, balanceAfter);
+        var keyRow = await db.IdempotencyKeys
+            .FirstAsync(x => x.CustomerId == scope && x.Key == idempotencyKey, ct);
+        keyRow.ResponseBody = JsonSerializer.Serialize(result);
+
         await db.SaveChangesAsync(ct);
         await dbTx.CommitAsync(ct);
 
-        return new CreditResult(transactionId, balanceAfter);
+        return result;
     }
 
-    private static bool IsUniqueCustomer(DbUpdateException ex) =>
+    private async Task<bool> TryClaimIdempotencyKeyAsync(
+        string scope,
+        string key,
+        string requestHash,
+        CancellationToken ct)
+    {
+        db.IdempotencyKeys.Add(new IdempotencyKey
+        {
+            CustomerId = scope,
+            Key = key,
+            RequestHash = requestHash,
+            CreatedAt = time.GetUtcNow(),
+        });
+
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            return true;
+        }
+        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        {
+            db.ChangeTracker.Clear();
+            return false;
+        }
+    }
+
+    private async Task<CreditResult> WaitForCachedCreditAsync(
+        string scope,
+        string key,
+        string requestHash,
+        CancellationToken ct)
+    {
+        for (var i = 0; i < 60; i++)
+        {
+            var row = await db.IdempotencyKeys.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.CustomerId == scope && x.Key == key, ct);
+
+            if (row is null)
+                throw new AppException(409, "idempotency_in_progress", "Credit is still processing");
+
+            if (row.RequestHash != requestHash)
+                throw new AppException(422, "idempotency_conflict", "Idempotency-Key was used with a different request");
+
+            if (row.ResponseBody is not null)
+            {
+                var cached = JsonSerializer.Deserialize<CreditResult>(row.ResponseBody)
+                    ?? throw new InvalidOperationException("Invalid idempotency payload");
+                return cached with { Cached = true };
+            }
+
+            await Task.Delay(50, ct);
+        }
+
+        throw new AppException(409, "idempotency_in_progress", "Credit is still processing");
+    }
+
+    private static string HashCredit(Guid walletId, long amountKobo)
+    {
+        var payload = $"{walletId}|{amountKobo}";
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(payload));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static bool IsUniqueViolation(DbUpdateException ex) =>
         ex.InnerException is PostgresException pg && pg.SqlState == PostgresErrorCodes.UniqueViolation;
 }

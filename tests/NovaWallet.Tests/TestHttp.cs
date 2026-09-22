@@ -27,7 +27,11 @@ internal static class TestHttp
         return body!.Id;
     }
 
-    public static async Task CreditAsync(HttpClient client, Guid walletId, long amountKobo)
+    public static async Task CreditAsync(
+        HttpClient client,
+        Guid walletId,
+        long amountKobo,
+        string? idempotencyKey = null)
     {
         var sys = await TokenAsync(client, "system", "system");
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/wallets/{walletId}/credit")
@@ -35,8 +39,26 @@ internal static class TestHttp
             Content = JsonContent.Create(new { amountKobo }),
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", sys);
+        request.Headers.Add("Idempotency-Key", idempotencyKey ?? Guid.NewGuid().ToString("N"));
         var response = await client.SendAsync(request);
         response.EnsureSuccessStatusCode();
+    }
+
+    public static async Task<HttpResponseMessage> CreditRawAsync(
+        HttpClient client,
+        Guid walletId,
+        long amountKobo,
+        string idempotencyKey,
+        string? systemToken = null)
+    {
+        var sys = systemToken ?? await TokenAsync(client, "system", "system");
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/wallets/{walletId}/credit")
+        {
+            Content = JsonContent.Create(new { amountKobo }),
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", sys);
+        request.Headers.Add("Idempotency-Key", idempotencyKey);
+        return await client.SendAsync(request);
     }
 
     public static async Task<long> GetBalanceAsync(HttpClient client, string token, Guid walletId)

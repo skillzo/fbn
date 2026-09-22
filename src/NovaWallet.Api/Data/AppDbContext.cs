@@ -23,7 +23,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Balance).HasColumnName("balance");
             e.Property(x => x.Currency).HasColumnName("currency").HasMaxLength(3).IsFixedLength();
             e.Property(x => x.CreatedAt).HasColumnName("created_at");
-            e.ToTable(t => t.HasCheckConstraint("CK_wallets_balance_nonneg", "balance >= 0"));
+            e.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_wallets_balance_nonneg", "balance >= 0");
+                t.HasCheckConstraint("CK_wallets_currency_ngn", "currency = 'NGN'");
+            });
         });
 
         modelBuilder.Entity<WalletTransaction>(e =>

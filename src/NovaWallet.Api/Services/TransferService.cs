@@ -35,11 +35,8 @@ public class TransferService(AppDbContext db, TimeProvider time, IConfiguration 
 
         var from = await db.Wallets.AsNoTracking()
             .FirstOrDefaultAsync(w => w.Id == request.FromWalletId, ct);
-        if (from is null)
+        if (from is null || from.CustomerId != customerId)
             throw new AppException(404, "wallet_not_found", "Source wallet not found");
-
-        if (from.CustomerId != customerId)
-            throw new AppException(403, "forbidden", "You do not own the source wallet");
 
         var toExists = await db.Wallets.AsNoTracking()
             .AnyAsync(w => w.Id == request.ToWalletId, ct);
